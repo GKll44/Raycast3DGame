@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑器</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 15px;
+            line-height: 1.5;
+            color: #202020;
+        }
+        .header {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        h1 { margin: 0; font-size: 20px; }
+        .section {
+            margin: 15px 0;
+            padding: 15px;
+        }
+        .preview {
+            width: 128px;
+            height: 128px;
+            display: inline-block;
+            margin: 5px;
+            background-size: cover;
+            image-rendering: pixelated;
+            vertical-align: middle;
+        }
+        input[type="file"] { display: none; }
+        .file-btn {
+            display: inline-block;
+            margin: 0 3px;
+            padding: 5px 10px;
+            cursor: pointer;
+            background: #ececec;
+            border: 1px solid #b3b3b3;
+        }
+        .file-btn:hover { border: 1px solid #0062f5; }
+        .file-btn:active { padding: 4px 9px; border: 2px solid #0062f5; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(16, 24px);
+            gap: 1px;
+            margin: 15px auto;
+            width: fit-content;
+            background: #111;
+        }
+
+        .grid.large { grid-template-columns: repeat(24, 18px); }
+
+        .grid.small { grid-template-columns: repeat(12, 26px); }
+
+        .cell {
+            width: 24px;
+            height: 24px;
+            background: #222;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+        .grid.large .cell { width: 18px; height: 18px; font-size: 8px; }
+
+        .grid.small .cell { width: 26px; height: 26px; font-size: 12px; }
+
+        .cell.wall { background: #aaa; color: #000; }
+
+        .cell.player { background: #ff0; color: #000; }
+        
+        .tools {
+            text-align: center;
+            margin: 10px 0;
+        }
+        .tools button {
+            margin: 0 3px;
+            padding: 5px 10px;
+            cursor: pointer;
+            background: #ececec;
+            border: 1px solid #b3b3b3;
+        }
+        .tools button.active { padding: 4px 9px; border: 2px solid #0062f5; }
+        .slider-box {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 400px;
+        }
+        .slider-box input[type="range"] { flex: 1; }
+        .slider-box span { min-width: 60px; text-align: right; }
+        .checkbox-box {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        input[type="checkbox"] { width: 16px; height: 16px; }
+        .help { color: #888; font-size: 11px; margin-top: 5px; }
+        .map-size-selector { margin: 10px 0; text-align: center; }
+        .map-size-selector label { margin: 0 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>编辑器</h1>
+        <div style="margin-top: 10px;">
+            <button onclick="saveAll()">保存</button>
+            <button onclick="resetAll()" >重置默认</button>
+            <button onclick="backToGame()" >返回游戏</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>纹理设置</h2>
+        <div>
+            <label style="display:block; margin-bottom:5px;">墙壁</label>
+            <div id="wallPreview" class="preview" style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22><rect fill=%22%23666%22 width=%2264%22 height=%2264%22/><rect fill=%22%23888%22 x=%222%22 y=%222%22 width=%2260%22 height=%2260%22/></svg>');"></div>
+            <label class="file-btn">
+                选择
+                <input type="file" accept="image/*" onchange="loadTex(this, 'wall')">
+            </label>
+            <button onclick="resetTex('wall')" >重置</button>
+        </div>
+        <div style="margin-top: 10px;">
+            <label style="display:block; margin-bottom:5px;">地板</label>
+            <div id="floorPreview" class="preview" style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22><rect fill=%22%23333%22 width=%2264%22 height=%2264%22/><rect fill=%22%23444%22 width=%2232%22 height=%2232%22/><rect fill=%22%23444%22 x=%2232%22 y=%2232%22 width=%2232%22 height=%2232%22/></svg>');"></div>
+            <label class="file-btn">
+                选择
+                <input type="file" accept="image/*" onchange="loadTex(this, 'floor')">
+            </label>
+            <button onclick="resetTex('floor')" >重置</button>
+        </div>
+        <p class="help">支持 JPG、PNG、GIF 图片会被缩放为 64x64 像素</p>
+    </div>
+
+    <div class="section">
+        <h2>地图编辑</h2>
+        <div class="map-size-selector">
+            <label><input type="radio" name="mapSize" value="12" onchange="changeMapSize(12)">12×12</label>
+            <label><input type="radio" name="mapSize" value="16" checked onchange="changeMapSize(16)">6×16</label>
+            <label><input type="radio" name="mapSize" value="24" onchange="changeMapSize(24)">24×24</label>
+        </div>
+        <div class="tools">
+            <button class="tool active" onclick="setTool('wall')" title="墙">#</button>
+            <button class="tool" onclick="setTool('empty')" title="地">.</button>
+            <button class="tool" onclick="setTool('player')" title="起点">P</button>
+            <button onclick="clearMap()">清空</button>
+            <button onclick="randomMap()">随机</button>
+        </div>
+        <div id="grid" class="grid"></div>
+        <p class="help">点击格子编辑 你必须保留一个P作为起点!</p>
+    </div>
+
+    <div class="section">
+        <h2>游戏设置</h2>
+        <p class="help">包含了一些游戏内没有的设置的哦~</p>
+        <div class="slider-box">
+            <span>视野:</span>
+            <input type="range" id="fov" min="60" max="120" value="90">
+            <span id="fovVal">90°</span>
+        </div>
+        <div class="slider-box">
+            <span>渲染距离:</span>
+            <input type="range" id="rd" min="10" max="50" value="25">
+            <span id="rdVal">25</span>
+        </div>
+        <div class="slider-box">
+            <span>触摸灵敏度:</span>
+            <input type="range" id="sens" min="0.3" max="2.0" step="0.1" value="1.0">
+            <span id="sensVal">1.0</span>
+        </div>
+        <div class="slider-box">
+            <span>渲染质量:</span>
+            <input type="range" id="quality" min="1" max="4" step="1" value="2">
+            <span id="qualityVal">中</span>
+        </div>
+        <div class="slider-box">
+            <span>移动速度:</span>
+            <input type="range" id="moveSpeed" min="0.02" max="0.2" step="0.01" value="0.08">
+            <span id="moveSpeedVal">0.08</span>
+        </div>
+        <div class="slider-box">
+            <span>旋转速度:</span>
+            <input type="range" id="rotSpeed" min="0.01" max="0.1" step="0.005" value="0.04">
+            <span id="rotSpeedVal">0.04</span>
+        </div>
+        <div class="slider-box">
+            <span>跳跃力度:</span>
+            <input type="range" id="jumpForce" min="0.1" max="0.4" step="0.01" value="0.2">
+            <span id="jumpForceVal">0.2</span>
+        </div>
+        <div class="slider-box">
+            <span>玩家高度:</span>
+            <input type="range" id="eyeHeight" min="0.3" max="0.8" step="0.05" value="0.5">
+            <span id="eyeHeightVal">0.5</span>
+        </div>
+        <div class="checkbox-box">
+            <input type="checkbox" id="mm" checked>
+            <span>显示小地图</span>
+        </div>
+        <div class="checkbox-box">
+            <input type="checkbox" id="floorTex" checked>
+            <span>地板纹理</span>
+        </div>
+        <div class="checkbox-box">
+            <input type="checkbox" id="fog" checked>
+            <span>雾效果</span>
+        </div>
+        <div class="checkbox-box">
+            <input type="checkbox" id="showHud" checked>
+            <span>显示HUD</span>
+        </div>
+        <div class="checkbox-box">
+            <input type="checkbox" id="allowJump" checked>
+            <span>可以跳跃</span>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = '3d_settings';
+        let currentTool = 'wall';
+        let mapData = [];
+        let mapSize = 16;
+        let playerPos = {x: 8, y: 8};
+        let textures = { wall: null, floor: null };
+        let settings = { 
+            fov: 90, rd: 25, sens: 1.0, quality: 2,
+            mm: true, floorTex: true, fog: true,
+            showHud: true, allowJump: true,
+            moveSpeed: 0.08, rotSpeed: 0.04, 
+            jumpForce: 0.2, eyeHeight: 0.5
+        };
+
+        window.onload = () => {
+            loadFromStorage();
+            initGrid();
+            initSliders();
+        };
+
+        function changeMapSize(size) {
+            if (size !== mapSize && !confirm('改变地图大小会重新随机化地图，要继续吗？')) {
+                document.querySelector(`input[name="mapSize"][value="${mapSize}"]`).checked = true;
+                return;
+            }
+            mapSize = size;
+            playerPos = {x: Math.floor(size/2), y: Math.floor(size/2)};
+            initGrid();
+        }
+
+        function initGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            grid.className = 'grid';
+            if (mapSize === 24) grid.classList.add('large');
+            if (mapSize === 12) grid.classList.add('small');
+            mapData = [];
+
+            for(let y=0; y<mapSize; y++) {
+                const row = [];
+                for(let x=0; x<mapSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+
+                    let isWall = (x===0 || x===mapSize-1 || y===0 || y===mapSize-1);
+                    if (!isWall && !(x===playerPos.x && y===playerPos.y)) {
+                        isWall = Math.random() > 0.85;
+                    }
+
+                    if (isWall) {
+                        cell.classList.add('wall');
+                        row.push('#');
+                    } else if (x===playerPos.x && y===playerPos.y) {
+                        cell.classList.add('player');
+                        cell.textContent = 'P';
+                        row.push('.');
+                    } else {
+                        row.push('.');
+                    }
+
+                    cell.onclick = () => toggleCell(x, y);
+                    grid.appendChild(cell);
+                }
+                mapData.push(row);
+            }
+        }
+
+        function toggleCell(x, y) {
+            const index = y * mapSize + x;
+            const cells = document.getElementsByClassName('cell');
+            const cell = cells[index];
+
+            if (currentTool === 'player') {
+                document.querySelectorAll('.cell.player').forEach(c => {
+                    c.classList.remove('player');
+                    const cx = parseInt(c.dataset.x);
+                    const cy = parseInt(c.dataset.y);
+                    c.textContent = mapData[cy][cx] === '#' ? '#' : '.';
+                });
+            }
+
+            cell.classList.remove('wall', 'player');
+
+            if (currentTool === 'wall') {
+                cell.classList.add('wall');
+                mapData[y][x] = '#';
+            } else if (currentTool === 'empty') {
+                mapData[y][x] = '.';
+            } else if (currentTool === 'player') {
+                cell.classList.add('player');
+                cell.textContent = 'P';
+                mapData[y][x] = '.';
+                playerPos = {x, y};
+            }
+        }
+
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tools .tool').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function clearMap() {
+            if (confirm('清空地图吗?')) {
+                for(let y=1; y<mapSize-1; y++) {
+                    for(let x=1; x<mapSize-1; x++) {
+                        if (x === playerPos.x && y === playerPos.y) continue;
+                        const index = y * mapSize + x;
+                        const cells = document.getElementsByClassName('cell');
+                        const cell = cells[index];
+                        cell.classList.remove('wall');
+                        mapData[y][x] = '.';
+                    }
+                }
+            }
+        }
+
+        function randomMap() {
+            for(let y=1; y<mapSize-1; y++) {
+                for(let x=1; x<mapSize-1; x++) {
+                    if (x === playerPos.x && y === playerPos.y) continue;
+                    const isWall = Math.random() > 0.7;
+                    const index = y * mapSize + x;
+                    const cells = document.getElementsByClassName('cell');
+                    const cell = cells[index];
+                    if (isWall) {
+                        cell.classList.add('wall');
+                        mapData[y][x] = '#';
+                    } else {
+                        cell.classList.remove('wall');
+                        mapData[y][x] = '.';
+                    }
+                }
+            }
+        }
+
+        function loadTex(input, type) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const c = document.createElement('canvas');
+                    c.width = c.height = 64;
+                    const ctx = c.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 64, 64);
+                    const dataUrl = c.toDataURL();
+                    textures[type] = dataUrl;
+                    document.getElementById(type + 'Preview').style.backgroundImage = `url(${dataUrl})`;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function resetTex(type) {
+            textures[type] = null;
+            const defaultUrls = {
+                wall: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect fill='%23666' width='64' height='64'/><rect fill='%23888' x='2' y='2' width='60' height='60'/></svg>",
+                floor: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect fill='%23333' width='64' height='64'/><rect fill='%23444' width='32' height='32'/><rect fill='%23444' x='32' y='32' width='32' height='32'/></svg>"
+            };
+            document.getElementById(type + 'Preview').style.backgroundImage = `url('${defaultUrls[type]}')`;
+        }
+
+        function initSliders() {
+            const qualities = {1: '低', 2: '中', 3: '高', 4: '极高'};
+
+            ['fov', 'rd', 'sens', 'quality', 'moveSpeed', 'rotSpeed', 'jumpForce', 'eyeHeight'].forEach(key => {
+                const slider = document.getElementById(key);
+                const display = document.getElementById(key + 'Val');
+                if (!slider) return;
+                
+                slider.oninput = () => {
+                    settings[key] = parseFloat(slider.value);
+                    if (key === 'quality') {
+                        display.textContent = qualities[settings.quality];
+                    } else if (key === 'fov') {
+                        display.textContent = slider.value + '°';
+                    } else {
+                        display.textContent = slider.value;
+                    }
+                };
+            });
+
+            ['mm', 'floorTex', 'fog', 'showHud', 'allowJump'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.onchange = (e) => {
+                        settings[id] = e.target.checked;
+                    };
+                }
+            });
+        }
+
+        function saveAll() {
+            const data = {
+                textures: textures,
+                map: mapData.flat().join(''),
+                mapSize: mapSize,
+                playerStart: playerPos,
+                settings: settings
+            };
+
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                alert('设置已保存~');
+            } catch (e) {
+                alert('保存失败: 存储空间不足');
+                console.error(e);
+            }
+        }
+
+        function loadFromStorage() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (!saved) return;
+
+                const data = JSON.parse(saved);
+
+                if (data.textures) {
+                    textures = data.textures;
+                    if (textures.wall) document.getElementById('wallPreview').style.backgroundImage = `url(${textures.wall})`;
+                    if (textures.floor) document.getElementById('floorPreview').style.backgroundImage = `url(${textures.floor})`;
+                }
+
+                if (data.mapSize) {
+                    mapSize = data.mapSize;
+                    document.querySelector(`input[name="mapSize"][value="${mapSize}"]`).checked = true;
+                }
+
+                if (data.map) {
+                    const flatMap = data.map;
+                    initGrid();
+                    
+                    const cells = document.getElementsByClassName('cell');
+                    for(let i=0; i<flatMap.length && i<cells.length; i++) {
+                        const x = i % mapSize;
+                        const y = Math.floor(i / mapSize);
+                        const cell = cells[i];
+                        if (!cell) continue;
+                        
+                        cell.classList.remove('wall', 'player');
+                        
+                        if (flatMap[i] === '#') {
+                            cell.classList.add('wall');
+                            mapData[y][x] = '#';
+                        } else {
+                            mapData[y][x] = '.';
+                        }
+                    }
+                }
+
+                if (data.playerStart) {
+                    playerPos = data.playerStart;
+                    const index = playerPos.y * mapSize + playerPos.x;
+                    const cells = document.getElementsByClassName('cell');
+                    if (cells[index]) {
+                        cells[index].classList.add('player');
+                        cells[index].textContent = 'P';
+                    }
+                }
+
+                if (data.settings) {
+                    settings = {...settings, ...data.settings};
+                    
+                    const setSlider = (id, val) => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = val;
+                    };
+                    
+                    setSlider('fov', settings.fov);
+                    setSlider('rd', settings.rd);
+                    setSlider('sens', settings.sens);
+                    setSlider('quality', settings.quality);
+                    setSlider('moveSpeed', settings.moveSpeed);
+                    setSlider('rotSpeed', settings.rotSpeed);
+                    setSlider('jumpForce', settings.jumpForce);
+                    setSlider('eyeHeight', settings.eyeHeight);
+                    
+                    const setCheck = (id, val) => {
+                        const el = document.getElementById(id);
+                        if (el) el.checked = val;
+                    };
+                    
+                    setCheck('mm', settings.mm);
+                    setCheck('floorTex', settings.floorTex);
+                    setCheck('fog', settings.fog);
+                    setCheck('showHud', settings.showHud);
+                    setCheck('allowJump', settings.allowJump);
+
+                    const qualities = {1: '低', 2: '中', 3: '高', 4: '极高'};
+                    document.getElementById('fovVal').textContent = settings.fov + '°';
+                    document.getElementById('rdVal').textContent = settings.rd;
+                    document.getElementById('sensVal').textContent = settings.sens;
+                    document.getElementById('qualityVal').textContent = qualities[settings.quality] || settings.quality;
+                    document.getElementById('moveSpeedVal').textContent = settings.moveSpeed;
+                    document.getElementById('rotSpeedVal').textContent = settings.rotSpeed;
+                    document.getElementById('jumpForceVal').textContent = settings.jumpForce;
+                    document.getElementById('eyeHeightVal').textContent = settings.eyeHeight;
+                }
+            } catch (e) {
+                console.error('Load error:', e);
+            }
+        }
+
+        function resetAll() {
+            if (confirm('嗯?要重置吗?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        function backToGame() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

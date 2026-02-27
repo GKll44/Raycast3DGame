@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: monospace;
+            touch-action: none;
+            user-select: none;
+        }
+        #gameCanvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        .ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .menu {
+            background: #333;
+            border: 2px solid #fff;
+            padding: 20px;
+            text-align: center;
+            pointer-events: auto;
+        }
+        .menu h1 {
+            color: #ff0;
+            margin: 0 0 15px 0;
+        }
+        .btn {
+            display: block;
+            width: 180px;
+            padding: 8px;
+            margin: 8px auto;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .hidden { display: none !important; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #aaa;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        #minimap {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            border: 1px solid #fff;
+            background: #222;
+        }
+        .opt-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            min-width: 250px;
+        }
+        input[type="range"] { width: 80px; }
+        .touch-controls {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            width: 100%;
+            height: 140px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+        }
+        .touch-controls.active { 
+            display: block !important; 
+        }
+        .joystick {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            width: 180px;
+            height: 180px;
+            pointer-events: auto;
+        }
+        .joystick-base {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid #666;
+            border-radius: 50%;
+            background: #333;
+        }
+        .joystick-knob {
+            position: absolute;
+            width: 40%;
+            height: 40%;
+            background: #888;
+            border-radius: 50%;
+            left: 30%;
+            top: 30%;
+        }
+        .look-btns {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 3px;
+            pointer-events: auto;
+        }
+        .look-btn {
+            background: #444;
+            border: 1px solid #666;
+            color: #fff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .look-btn:active { background: #666; }
+        .look-btn:nth-child(1) { grid-column: 2; }
+        .look-btn:nth-child(2) { grid-column: 1; grid-row: 2; }
+        .look-btn:nth-child(3) { grid-column: 2; grid-row: 2; }
+        .look-btn:nth-child(4) { grid-column: 3; grid-row: 2; }
+        .action-btns {
+            position: absolute;
+            right: 20px;
+            bottom: 110px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            pointer-events: auto;
+        }
+        .action-btn {
+            width: 50px;
+            height: 35px;
+            background: #444;
+            border: 1px solid #666;
+            color: #fff;
+            font-size: 12px;
+        }
+        .action-btn:active { background: #666; }
+    </style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud" class="hidden">POS: <span id="pos">0,0</span> | FPS: <span id="fps">60</span></div>
+    <canvas id="minimap" class="hidden"></canvas>
+
+    <div id="touchControls" class="touch-controls">
+        <div class="joystick" id="joystick">
+            <div class="joystick-base"></div>
+            <div class="joystick-knob" id="knob"></div>
+        </div>
+        <div class="look-btns">
+            <button class="look-btn" id="btnUp">▲</button>
+            <button class="look-btn" id="btnLeft">◀</button>
+            <button class="look-btn" id="btnDown">▼</button>
+            <button class="look-btn" id="btnRight">▶</button>
+        </div>
+        <div class="action-btns">
+            <button class="action-btn" id="btnJump">跳跃</button>
+            <button class="action-btn" id="btnMenu">菜单</button>
+        </div>
+    </div>
+
+    <div id="pauseMenu" class="ui hidden">
+        <div class="menu">
+            <h1>已暂停</h1>
+            <button class="btn" onclick="resumeGame()">继续</button>
+            <button class="btn" onclick="showOptions()">选项</button>
+            <button class="btn" onclick="openEditor()">自定义</button>
+        </div>
+    </div>
+
+    <div id="optionsMenu" class="ui hidden">
+        <div class="menu" style="text-align: left;">
+            <h1 style="text-align: center;">选项</h1>
+            <div class="opt-row">
+                <span>视野</span>
+                <input type="range" id="optFov" min="60" max="120" value="90" oninput="updateOpt('fov', this.value)">
+                <span id="valFov">90</span>
+            </div>
+            <div class="opt-row">
+                <span>渲染距离</span>
+                <input type="range" id="optRd" min="10" max="50" value="25" oninput="updateOpt('rd', this.value)">
+                <span id="valRd">25</span>
+            </div>
+            <div class="opt-row">
+                <span>触摸灵敏度</span>
+                <input type="range" id="optSens" min="0.3" max="2.0" step="0.1" value="1.0" oninput="updateOpt('sens', this.value)">
+                <span id="valSens">1.0</span>
+            </div>
+            <div class="opt-row">
+                <span>渲染质量</span>
+                <input type="range" id="optQuality" min="1" max="4" step="1" value="2" oninput="updateOpt('quality', this.value)">
+                <span id="valQuality">中</span>
+            </div>
+            <div class="opt-row">
+                <span>小地图</span>
+                <button class="btn" style="margin:0; padding:5px 10px; width:auto;" onclick="toggleOpt('mm')" id="btnMm">开</button>
+            </div>
+            <div class="opt-row">
+                <span>地板纹理</span>
+                <button class="btn" style="margin:0; padding:5px 10px; width:auto;" onclick="toggleOpt('floorTex')" id="btnFloorTex">开</button>
+            </div>
+            <div class="opt-row">
+                <span>雾效果</span>
+                <button class="btn" style="margin:0; padding:5px 10px; width:auto;" onclick="toggleOpt('fog')" id="btnFog">开</button>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="btn" onclick="closeOptions()" style="width: auto; padding: 5px 20px;">返回</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+const STORAGE_KEY = '3d_settings';
+let SW = window.innerWidth, SH = window.innerHeight;
+let MW = 16, MH = 16;
+
+const settings = {
+    fov: 90, rd: 25, mm: true, sens: 1.0, quality: 2, floorTex: true, fog: true,
+    showHud: true, allowJump: true, touch: 'auto',
+    moveSpeed: 0.08, rotSpeed: 0.04, jumpForce: 0.2, eyeHeight: 0.5
+};
+
+let mapStr = "";
+let px = 8.5, py = 8.5, pa = 0, pitch = 0, pz = 0, vz = 0;
+let isJumping = false;
+let MS = 0.08, RS = 0.04, PITCH_SPEED = 0.03, PITCH_MAX = 1.0;
+let EYE_HEIGHT = 0.5, GRAVITY = 0.015, JUMP_FORCE = 0.2;
+const PLAYER_RADIUS = 0.25;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+let imgData = null;
+let buf = null;
+
+function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = window.innerWidth;
+    const cssH = window.innerHeight;
+    SW = Math.max(1, Math.floor(cssW * dpr));
+    SH = Math.max(1, Math.floor(cssH * dpr));
+    canvas.width = SW;
+    canvas.height = SH;
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    ctx.imageSmoothingEnabled = false;
+    imgData = ctx.createImageData(SW, SH);
+    buf = new Uint32Array(imgData.data.buffer);
+}
+
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+const mmCanvas = document.getElementById('minimap');
+const mmCtx = mmCanvas.getContext('2d');
+
+let wallTex = null, floorTex = null;
+let customWallTex = null, customFloorTex = null;
+
+function createDefaultTexture(type) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d');
+    if (type === 'wall') {
+        x.fillStyle = '#666'; x.fillRect(0,0,64,64);
+        x.fillStyle = '#888'; x.fillRect(2,2,60,60);
+        x.strokeStyle = '#444'; x.lineWidth = 2; x.strokeRect(0,0,64,64);
+    } else {
+        x.fillStyle = '#333'; x.fillRect(0,0,64,64);
+        x.fillStyle = '#444'; x.fillRect(0,0,32,32); x.fillRect(32,32,32,32);
+    }
+    return x.getImageData(0,0,64,64);
+}
+
+function loadTextures() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const data = JSON.parse(saved);
+            if (data.settings) {
+                Object.assign(settings, data.settings);
+                MS = settings.moveSpeed;
+                RS = settings.rotSpeed;
+                JUMP_FORCE = settings.jumpForce;
+                EYE_HEIGHT = settings.eyeHeight;
+                // 确保 touch 设置存在，默认为 auto
+                if (!settings.touch) settings.touch = 'auto';
+            }
+            if (data.map) {
+                mapStr = data.map;
+                MW = data.mapSize || 16;
+                MH = MW;
+            } else {
+                generateDefaultMap();
+            }
+            const promises = [];
+            if (data.textures && data.textures.wall) {
+                promises.push(new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const c = document.createElement('canvas');
+                        c.width = c.height = 64;
+                        const ctx = c.getContext('2d');
+                        ctx.drawImage(img, 0, 0, 64, 64);
+                        customWallTex = ctx.getImageData(0,0,64,64);
+                        resolve();
+                    };
+                    img.onerror = () => resolve();
+                    img.src = data.textures.wall;
+                }));
+            }
+            if (data.textures && data.textures.floor) {
+                promises.push(new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const c = document.createElement('canvas');
+                        c.width = c.height = 64;
+                        const ctx = c.getContext('2d');
+                        ctx.drawImage(img, 0, 0, 64, 64);
+                        customFloorTex = ctx.getImageData(0,0,64,64);
+                        resolve();
+                    };
+                    img.onerror = () => resolve();
+                    img.src = data.textures.floor;
+                }));
+            }
+            return Promise.all(promises);
+        } else {
+            generateDefaultMap();
+        }
+    } catch (e) {
+        console.error('Load error:', e);
+        generateDefaultMap();
+    }
+    return Promise.resolve();
+}
+
+function generateDefaultMap() {
+    MW = 16; MH = 16;
+    mapStr = "################" +
+        "#..............#" +
+        "#..#....###.####" +
+        "#...#...#......#" +
+        "#....#..#......#" +
+        "#.......#......#" +
+        "#.......###.####" +
+        "#..............#" +
+        "#.........#....#" +
+        "#..............#" +
+        "#...#..#.......#" +
+        "#...#..#..#....#" +
+        "#...#..#.......#" +
+        "#...##########.#" +
+        "#..............#" +
+        "################";
+}
+
+function initTextures() {
+    wallTex = customWallTex || createDefaultTexture('wall');
+    floorTex = customFloorTex || createDefaultTexture('floor');
+}
+
+function saveSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        saved.settings = settings;
+        if (!saved.map) saved.map = mapStr;
+        if (!saved.textures) saved.textures = {};
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    } catch (e) { console.error('Save error:', e); }
+}
+
+// 强制显示触摸控制（调试用）
+function forceShowTouchControls() {
+    document.getElementById('touchControls').classList.add('active');
+    document.getElementById('touchControls').style.display = 'block';
+    console.log('Touch controls forced visible');
+}
+
+function castRay(rx, ry, ang) {
+    const sin = Math.sin(ang), cos = Math.cos(ang);
+    let mx = Math.floor(rx), my = Math.floor(ry);
+    const dx = Math.abs(1/sin), dy = Math.abs(1/cos);
+    let sx, sy, sdx, sdy, side = 0;
+
+    if (sin < 0) { sx = -1; sdx = (rx - mx) * dx; }
+    else { sx = 1; sdx = (mx + 1 - rx) * dx; }
+    if (cos < 0) { sy = -1; sdy = (ry - my) * dy; }
+    else { sy = 1; sdy = (my + 1 - ry) * dy; }
+
+    let dist = 0, hit = 0;
+    while (!hit) {
+        if (sdx < sdy) { sdx += dx; mx += sx; side = 0; }
+        else { sdy += dy; my += sy; side = 1; }
+        if (mx < 0 || mx >= MW || my < 0 || my >= MH) { hit = 1; dist = settings.rd; }
+        else if (mapStr[my*MW+mx] === '#') { hit = 1; dist = side===0 ? sdx-dx : sdy-dy; }
+    }
+
+    let wx = side===0 ? ry + dist*cos : rx + dist*sin;
+    wx -= Math.floor(wx);
+    return { dist, side, wx, mx, my };
+}
+
+function render() {
+    buf.fill(0xFF000000);
+    const fov = settings.fov * Math.PI / 180;
+    const halfFov = fov / 2;
+    const tanFov = Math.tan(fov / 2);
+    const pitchOffset = Math.tan(pitch) * (SH / 2);
+    const horizon = Math.max(0, Math.min(SH-1, Math.floor(SH/2 + pitchOffset)));
+    const eyeZ = EYE_HEIGHT + pz;
+    const step = 5 - settings.quality;
+
+    for (let y = 0; y < horizon; y++) {
+        const t = y / horizon;
+        const r = Math.floor(32 + 64*t);
+        const g = Math.floor(64 + 80*t);
+        const b = Math.floor(128 + 80*t);
+        const color = (255<<24) | (b<<16) | (g<<8) | r;
+        for (let x = 0; x < SW; x++) buf[y*SW+x] = color;
+    }
+
+    for (let y = horizon; y < SH; y += step) {
+        const rowDist = (eyeZ * SH) / (2.0 * (y - horizon) * tanFov);
+        if (rowDist > settings.rd) continue;
+
+        for (let x = 0; x < SW; x += step) {
+            const rayAngle = pa - halfFov + (x / SW) * fov;
+            const floorX = px + Math.sin(rayAngle) * rowDist;
+            const floorY = py + Math.cos(rayAngle) * rowDist;
+
+            const texX = Math.floor((floorX % 1) * 63);
+            const texY = Math.floor((floorY % 1) * 63);
+
+            let r, g, b;
+            if (settings.floorTex && floorTex) {
+                const idx = (texY * 64 + texX) * 4;
+                r = floorTex.data[idx];
+                g = floorTex.data[idx+1];
+                b = floorTex.data[idx+2];
+            } else {
+                const check = (Math.floor(floorX) + Math.floor(floorY)) % 2 === 0;
+                r = g = b = check ? 100 : 50;
+            }
+
+            const fog = settings.fog ? Math.max(0, 1 - rowDist / settings.rd) : 1;
+            r = Math.floor(r * fog);
+            g = Math.floor(g * fog);
+            b = Math.floor(b * fog);
+
+            const color = (255<<24) | (b<<16) | (g<<8) | r;
+
+            for (let dy = 0; dy < step && y + dy < SH; dy++) {
+                for (let dx = 0; dx < step && x + dx < SW; dx++) {
+                    buf[(y + dy) * SW + (x + dx)] = color;
+                }
+            }
+        }
+    }
+
+    for (let x = 0; x < SW; x += step) {
+        const ang = pa - halfFov + (x/SW)*fov;
+        const ray = castRay(px, py, ang);
+
+        if (ray.dist >= settings.rd) continue;
+
+        const h = (SH / (ray.dist * tanFov)) * 0.5;
+        const off = (eyeZ - 0.5) * h;
+        const y0 = Math.max(0, Math.floor(horizon - h/2 + off));
+        const y1 = Math.min(SH-1, Math.floor(horizon + h/2 + off));
+
+        const tx = Math.floor(ray.wx * 63);
+        const light = ray.side === 0 ? 1.0 : 0.7;
+        const fog = settings.fog ? Math.max(0, 1 - ray.dist / settings.rd) : 1;
+
+        for (let y = y0; y <= y1; y++) {
+            const ty = Math.floor(((y - (horizon - h/2 + off)) / h) * 63);
+            const idx = (Math.max(0, Math.min(63, ty)) * 64 + tx) * 4;
+            const r = Math.floor(wallTex.data[idx] * light * fog);
+            const g = Math.floor(wallTex.data[idx+1] * light * fog);
+            const b = Math.floor(wallTex.data[idx+2] * light * fog);
+            const color = (255<<24) | (b<<16) | (g<<8) | r;
+
+            for (let w=0; w<step && x+w<SW; w++) buf[y*SW+x+w] = color;
+        }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+}
+
+function drawMinimap() {
+    if (!settings.mm) { mmCanvas.classList.add('hidden'); return; }
+    mmCanvas.classList.remove('hidden');
+    const cs = 150/Math.max(MW, MH);
+
+    mmCanvas.width = 150;
+    mmCanvas.height = 150;
+
+    for (let y=0; y<MH; y++) {
+        for (let x=0; x<MW; x++) {
+            mmCtx.fillStyle = mapStr[y*MW+x]==='#' ? '#aaa' : '#333';
+            mmCtx.fillRect(x*cs, y*cs, cs, cs);
+        }
+    }
+
+    mmCtx.fillStyle = '#0f0';
+    mmCtx.beginPath(); mmCtx.arc(px*cs, py*cs, 3, 0, Math.PI*2); mmCtx.fill();
+    mmCtx.strokeStyle = '#0f0';
+    mmCtx.beginPath(); mmCtx.moveTo(px*cs, py*cs); 
+    mmCtx.lineTo((px+Math.sin(pa)*2)*cs, (py+Math.cos(pa)*2)*cs); mmCtx.stroke();
+}
+
+function checkCol(x, y) {
+    for (let my=0; my<MH; my++) {
+        for (let mx=0; mx<MW; mx++) {
+            if (mapStr[my*MW+mx]==='#') {
+                const cx = Math.max(mx, Math.min(x, mx+1));
+                const cy = Math.max(my, Math.min(y, my+1));
+                const dx=x-cx, dy=y-cy;
+                if (dx*dx+dy*dy < PLAYER_RADIUS*PLAYER_RADIUS) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function tryMove(dx, dy) {
+    if (!checkCol(px+dx, py+dy)) { px+=dx; py+=dy; }
+    else if (!checkCol(px+dx, py)) px+=dx;
+    else if (!checkCol(px, py+dy)) py+=dy;
+}
+
+function update() {
+    if (isPaused || !isRunning) return;
+
+    if (keys['w']) tryMove(Math.sin(pa)*MS, Math.cos(pa)*MS);
+    if (keys['s']) tryMove(-Math.sin(pa)*MS, -Math.cos(pa)*MS);
+    if (keys['a']) tryMove(Math.sin(pa-Math.PI/2)*MS, Math.cos(pa-Math.PI/2)*MS);
+    if (keys['d']) tryMove(Math.sin(pa+Math.PI/2)*MS, Math.cos(pa+Math.PI/2)*MS);
+    if (keys['arrowleft']) pa -= RS * settings.sens;
+    if (keys['arrowright']) pa += RS * settings.sens;
+    if (keys['arrowup']) pitch = Math.min(PITCH_MAX, pitch+PITCH_SPEED);
+    if (keys['arrowdown']) pitch = Math.max(-PITCH_MAX, pitch-PITCH_SPEED);
+
+    if (touchState.joystick.active) {
+        const jx = touchState.joystick.x;
+        const jy = touchState.joystick.y;
+        const moveSpeed = MS * Math.sqrt(jx*jx + jy*jy);
+        const moveAngle = pa + Math.atan2(jx, -jy);
+        if (moveSpeed > 0.01) {
+            tryMove(Math.sin(moveAngle)*moveSpeed, Math.cos(moveAngle)*moveSpeed);
+        }
+    }
+
+    if (touchState.look.left) pa -= RS * 2 * settings.sens;
+    if (touchState.look.right) pa += RS * 2 * settings.sens;
+    if (touchState.look.up) pitch = Math.min(PITCH_MAX, pitch+PITCH_SPEED*2);
+    if (touchState.look.down) pitch = Math.max(-PITCH_MAX, pitch-PITCH_SPEED*2);
+
+    if (keys[' '] && !isJumping && settings.allowJump) { vz = JUMP_FORCE; isJumping = true; }
+    if (isJumping || pz > 0) {
+        pz += vz; vz -= GRAVITY;
+        if (pz <= 0) { pz = 0; vz = 0; isJumping = false; }
+    }
+}
+
+let lastTime = 0;
+function loop(timestamp) {
+    if (!isRunning) return;
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    update();
+    render();
+    drawMinimap();
+
+    if (settings.showHud) {
+        document.getElementById('pos').innerText = `${px.toFixed(1)},${py.toFixed(1)}`;
+        document.getElementById('fps').innerText = Math.round(1000/(dt || 16));
+    }
+
+    requestAnimationFrame(loop);
+}
+
+async function startGame() {
+    await loadTextures();
+    initTextures();
+    resizeCanvas();
+
+    if (settings.showHud) {
+        document.getElementById('hud').classList.remove('hidden');
+    } else {
+        document.getElementById('hud').classList.add('hidden');
+    }
+
+    // 改进移动端检测：同时检测触摸支持和屏幕宽度
+    const isMobileDevice = isTouch || window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const showTouch = settings.touch === 'on' || (settings.touch === 'auto' && isMobileDevice);
+    console.log('Touch controls:', showTouch, 'isTouch:', isTouch, 'isMobile:', isMobileDevice, 'setting:', settings.touch);
+    if (showTouch) {
+        document.getElementById('touchControls').classList.add('active');
+        document.getElementById('touchControls').style.display = 'block';
+    }
+
+    isRunning = true; isPaused = false;
+    px=Math.floor(MW/2)+0.5; py=Math.floor(MH/2)+0.5; pa=0; pitch=0; pz=0;
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+}
+
+function showOptions() {
+    document.getElementById('pauseMenu').classList.add('hidden');
+    document.getElementById('optionsMenu').classList.remove('hidden');
+    updateUI();
+}
+
+function closeOptions() {
+    document.getElementById('optionsMenu').classList.add('hidden');
+    if (isPaused) document.getElementById('pauseMenu').classList.remove('hidden');
+}
+
+function resumeGame() {
+    isPaused = false;
+    document.getElementById('pauseMenu').classList.add('hidden');
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+}
+
+function openEditor() {
+    window.location.href = 'customize.html';
+}
+
+function toggleOpt(k) {
+    if (k==='mm') settings.mm = !settings.mm;
+    if (k==='floorTex') settings.floorTex = !settings.floorTex;
+    if (k==='fog') settings.fog = !settings.fog;
+    updateUI();
+    saveSettings();
+}
+
+function updateOpt(k, v) {
+    if (k === 'sens') settings[k] = parseFloat(v);
+    else settings[k] = parseInt(v);
+    updateUI();
+    saveSettings();
+}
+
+function updateUI() {
+    const qualities = {1: '低', 2: '中', 3: '高', 4: '极高'};
+    document.getElementById('btnMm').innerText = settings.mm ? '开' : '关';
+    document.getElementById('btnFloorTex').innerText = settings.floorTex ? '开' : '关';
+    document.getElementById('btnFog').innerText = settings.fog ? '开' : '关';
+    document.getElementById('valFov').innerText = settings.fov;
+    document.getElementById('valRd').innerText = settings.rd;
+    document.getElementById('valSens').innerText = settings.sens;
+    document.getElementById('valQuality').innerText = qualities[settings.quality] || settings.quality;
+
+    document.getElementById('optFov').value = settings.fov;
+    document.getElementById('optRd').value = settings.rd;
+    document.getElementById('optSens').value = settings.sens;
+    document.getElementById('optQuality').value = settings.quality;
+}
+
+const isTouch = 'ontouchstart' in window;
+let isRunning = false, isPaused = false, keys = {};
+let touchState = { joystick: { active: false, x: 0, y: 0 }, look: { up: false, down: false, left: false, right: false } };
+
+function initTouch() {
+    const joystick = document.getElementById('joystick');
+    const knob = document.getElementById('knob');
+    let touchId = null;
+
+    joystick.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        touchId = touch.identifier;
+        const rect = joystick.getBoundingClientRect();
+        touchState.joystick.active = true;
+        updateJoystick(touch.clientX, touch.clientY, rect);
+    }, {passive: false});
+
+    joystick.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchId) {
+                const rect = joystick.getBoundingClientRect();
+                updateJoystick(e.changedTouches[i].clientX, e.changedTouches[i].clientY, rect);
+                break;
+            }
+        }
+    }, {passive: false});
+
+    joystick.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchId) {
+                touchState.joystick.active = false;
+                touchState.joystick.x = touchState.joystick.y = 0;
+                knob.style.transform = `translate(0px, 0px)`;
+                touchId = null;
+                break;
+            }
+        }
+    }, {passive: false});
+
+    function updateJoystick(cx, cy, rect) {
+        const maxDist = 30;
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        let dx = cx - centerX;
+        let dy = cy - centerY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > maxDist) {
+            dx = (dx / dist) * maxDist;
+            dy = (dy / dist) * maxDist;
+        }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        touchState.joystick.x = dx / maxDist;
+        touchState.joystick.y = dy / maxDist;
+    }
+
+    const btns = {
+        'btnUp': 'up', 'btnDown': 'down', 'btnLeft': 'left', 'btnRight': 'right'
+    };
+
+    Object.entries(btns).forEach(([id, dir]) => {
+        const btn = document.getElementById(id);
+        ['touchstart', 'mousedown'].forEach(evt => {
+            btn.addEventListener(evt, (e) => { e.preventDefault(); touchState.look[dir] = true; });
+        });
+        ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(evt => {
+            btn.addEventListener(evt, (e) => { e.preventDefault(); touchState.look[dir] = false; });
+        });
+    });
+
+    document.getElementById('btnJump').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (settings.allowJump && !isJumping) { vz = JUMP_FORCE; isJumping = true; }
+    });
+    document.getElementById('btnMenu').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (isRunning && !isPaused) {
+            isPaused = true;
+            document.getElementById('pauseMenu').classList.remove('hidden');
+        }
+    });
+}
+
+window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === 'Escape' && isRunning && !isPaused) {
+        isPaused = true;
+        document.getElementById('pauseMenu').classList.remove('hidden');
+    }
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+initTouch();
+updateUI();
+
+window.addEventListener('load', () => {
+    startGame();
+});
+</script>
+</body>
+</html>
